@@ -5,10 +5,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="description"
-    content="Abdullah Farhan: aspiring data engineer working on 3D scan data pipelines, human-in-the-loop labelling data, and browser-based 3D QC tools.">
+    content="Abdullah Farhan: aspiring data engineer. Two years on the data team behind 3D scan pipelines: cloud data movement on GCS and S3, pipeline data quality, and batch processing in Python.">
   <meta property="og:title" content="Abdullah Farhan">
   <meta property="og:description"
-    content="Aspiring data engineer working on 3D scan pipelines. Case studies in data pipelines, 3D tooling and production debugging.">
+    content="Aspiring data engineer. Case studies in cloud data migration, pipeline data quality, batch pipelines and pipeline operations.">
   <meta property="og:type" content="website">
   <title>Abdullah Farhan</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -453,7 +453,7 @@
       gap: 16px;
     }
 
-    .stack div {
+    .stack > div {
       display: grid;
       gap: 6px;
     }
@@ -561,10 +561,10 @@
       <div>
         <p class="label">Portfolio · Aspiring Data Engineer</p>
         <h1 style="margin-top:14px">Abdullah<br>Farhan</h1>
-        <p class="role">Aspiring data engineer, working on 3D scan pipelines. Mechanical engineer by training.</p>
-        <p class="thesis">For four years I've worked on the data behind 3D laser scans of large industrial sites. That
-          means terabytes of point clouds, CAD models, and images labelled by people. I build tools that check their own
-          answers, and I track down the failures that everyone else's dashboard shows as green.</p>
+        <p class="role">Aspiring data engineer. Two years on the data team behind 3D scan pipelines. Mechanical engineer by training.</p>
+        <p class="thesis">I move, validate and process the data behind 3D laser scans of large industrial sites: terabytes of
+          point clouds, CAD models and human-labelled images, staged between AWS S3 and Google Cloud Storage for pipeline
+          runs on a Kubernetes cluster. I care about data that is correct, not just pipelines that finish green.</p>
         <div class="links">
           <a href="https://github.com/abdullah-farhan-1">github.com/abdullah-farhan-1</a>
           <a href="https://www.linkedin.com/in/abdullah-farhan-9738a43ab/">linkedin.com/in/abdullah-farhan</a>
@@ -594,7 +594,177 @@
 
       <article class="case lead">
         <div class="rail">
-          <span class="tag">Product · full stack</span>
+          <span class="tag">Cloud data migration</span>
+          <dl>
+            <div>
+              <dt>Scale</dt>
+              <dd>1.85 TB, 3,021 scans; 913 GB pull</dd>
+            </div>
+            <div>
+              <dt>Stack</dt>
+              <dd>GCS, gcloud, Python, Bash</dd>
+            </div>
+            <div>
+              <dt>Owned</dt>
+              <dd>Migration and verification</dd>
+            </div>
+          </dl>
+        </div>
+        <div class="body">
+          <h3>A 1.85 TB data swap where the tools said "success" and weren't</h3>
+          <p>I replaced a production point cloud dataset with re-aligned output. Almost every standard safety check
+            turned out to be wrong.</p>
+          <ul>
+            <li>The upload CLI dropped 35% of one deck's files and still exited 0. The cause was parallel composite
+              uploads hitting a token-refresh race under heavy load.</li>
+            <li>The re-aligned files were exactly the same size as the old ones, so a size-based sync would have skipped
+              all 3,021 and reported success.</li>
+            <li>Recursive delete permanently removes object versions even with bucket versioning on. My own verify
+              script also printed "all checks passed" after a parsing error skipped a check.</li>
+            <li>On the download side, a shared copy helper held whole 1 GB objects in memory and spawned a thread pool
+              on every call.</li>
+          </ul>
+          <div class="result"><span class="label">Result</span>
+            <p>No files lost. I now verify by object count and CRC32C, not exit codes, and take an explicit backup
+              before any delete. Streaming downloads cut memory from 11.8 GB to 0.5 GB and raised throughput from 62 to
+              87 MB/s.</p>
+          </div>
+        </div>
+      </article>
+
+      <article class="case">
+        <div class="rail">
+          <span class="tag">Pipeline data quality</span>
+          <dl>
+            <div>
+              <dt>Scale</dt>
+              <dd>96 pipeline runs over 15 months</dd>
+            </div>
+            <div>
+              <dt>Stack</dt>
+              <dd>Python, COCO, annotation vendor API, Prefect</dd>
+            </div>
+            <div>
+              <dt>Owned</dt>
+              <dd>Diagnosis, audit, fix, write-up</dd>
+            </div>
+          </dl>
+        </div>
+        <div class="body">
+          <h3>Found a silent label corruption bug that had been live for months</h3>
+          <p>Our annotation tool rejected a batch of human-labelled images, saying some labels pointed at classes that
+            didn't exist. The pipeline had finished green.</p>
+          <ul>
+            <li>I traced it to two things. The labelling vendor renumbers class IDs 1 to N on export. A refactor months
+              earlier had deleted the step that mapped them back, and the config file was byte-identical before and
+              after that change.</li>
+            <li>I found a field in each run's saved parameters that showed which code version it ran. With that I
+              audited 96 runs and narrowed the deploy switchover to a four-week window.</li>
+            <li>I showed that a run broke only when the new code met a class list with a gap in its IDs. That narrowed
+              the damage to exactly 2 runs, not the whole dataset.</li>
+            <li>In a separate labelling job, repeated scan IDs had created 42 blank duplicate images and stacked 16,631
+              duplicate labels onto 34 others. I traced it to a step that matched images by file name after throwing
+              away their full paths.</li>
+          </ul>
+          <div class="result"><span class="label">Result</span>
+            <p>A config-only fix, with output checked byte-for-byte against a reference run. It also includes a full
+              class mapping, so a future reorder of the classes can't silently mislabel data.</p>
+          </div>
+        </div>
+      </article>
+
+      <article class="case">
+        <div class="rail">
+          <span class="tag">Batch data pipeline</span>
+          <dl>
+            <div>
+              <dt>Scale</dt>
+              <dd>523.7 GB, 45,339 binary files, 7 platforms</dd>
+            </div>
+            <div>
+              <dt>Stack</dt>
+              <dd>Python, NumPy, Shapely, SciPy, Pillow</dd>
+            </div>
+            <div>
+              <dt>Owned</dt>
+              <dd>End to end: tool, validation, delivery</dd>
+            </div>
+          </dl>
+        </div>
+        <div class="body">
+          <h3>Counting 80,029 flanges across seven offshore platforms, with five ways to prove the count</h3>
+          <p>Repainting a platform is priced per paint block, and flanges are the standard measure of how much slow work
+            a block holds. Nobody had the numbers. The data existed in three separate places that had never been joined,
+            and it was older than several formats the current tools assume.</p>
+          <ul>
+            <li><b>A count that doesn't depend on the scan.</b> A flange seen from 15 scanners gives 15 different
+              partial views. So I pool every point of a part across all scans and use its overall centroid. That gives
+              one fixed location per flange, however many times it was seen. A threaded sweep reads the data at 330 to
+              560 MB/s and caches the result, so reruns with a different transform take seconds.</li>
+            <li><b>Why "99.8% landed in a block" proves nothing.</b> On a roughly symmetric platform, a mirrored
+              transform also places 100% of points. So I built five independent checks. Scanner positions projected onto
+              the plan matched to 0.000 px and 0.000 m on 5 of 7 platforms. An image-matching score showed points
+              landing on drawn structure 4.5 to 17.3 times more often than chance. The other three checks were
+              floor-level matching to find which CAD frame the blocks came from, clearance from each flange to its
+              block's walls as an error bar, and a from-scratch rewrite that reproduced all seven counts exactly.</li>
+            <li><b>Configs that were wrong.</b> The transform settings couldn't be used as written on 3 of 7 platforms,
+              and following them gave a clean run that assigned zero flanges. One platform's blocks were 9.8 cm off
+              because a pose was applied that shouldn't have been. Four separate measurements agreed on the fix, which
+              moved 190 flanges. I then showed the same defect couldn't occur on the other platforms.</li>
+            <li><b>File formats that lied.</b> Files named 0–5 looked like type IDs but were cube faces. Three platforms
+              labelled the part-ID field as "category". Four shipped no format description at all. I validated each
+              field by what it contained, not by its name, and required a 90% match against the parts list. Every
+              platform scored 98.9% or higher.</li>
+          </ul>
+          <div class="result"><span class="label">Result</span>
+            <p>78,722 flanges placed in 396 paint blocks, plus per-block point clouds for visual QC. The report states
+              its own limits: 1,153 flanges were never scanned, and 0.8–3.8% sit across two blocks. The biggest
+              remaining risk, upstream segmentation errors, is named rather than hidden.</p>
+          </div>
+        </div>
+      </article>
+
+      <article class="case">
+        <div class="rail">
+          <span class="tag">Pipeline operations</span>
+          <dl>
+            <div>
+              <dt>Scale</dt>
+              <dd>49,222-task job on autoscaled Ray</dd>
+            </div>
+            <div>
+              <dt>Stack</dt>
+              <dd>Kubernetes (GKE), Ray, Prefect</dd>
+            </div>
+            <div>
+              <dt>Owned</dt>
+              <dd>Root cause and fix proposal</dd>
+            </div>
+          </dl>
+        </div>
+        <div class="body">
+          <h3>Debugging a crashing cluster with no shell access</h3>
+          <p>Pipeline stages kept showing "Crashed" on a customer cluster. Nobody on the team had exec permission. I
+            found that was a provisioning gap and wrote the one-line fix for the project owners. Meanwhile I worked from
+            logs and events only.</p>
+          <ul>
+            <li>The autoscaler was evicting the orchestrator's own server pods, because they had no disruption budget.
+              That caused 500s on the concurrency lease endpoint, which killed stages as they started.</li>
+            <li>I ruled out two convincing red herrings. The "node out of memory" message referred to one container's
+              limit on a 504 GB node, and DNS autoscaling looked related but wasn't the cause.</li>
+            <li>The final failure stopped the job at 99.87%. I traced it to a credentials DaemonSet that showed 4 of 4
+              ready but only 1 available.</li>
+          </ul>
+          <div class="result"><span class="label">Result</span>
+            <p>A clear written diagnosis and infra fix, not a code change. Because the job keeps a resume ledger, only
+              the 64 missing tasks needed to rerun.</p>
+          </div>
+        </div>
+      </article>
+
+      <article class="case">
+        <div class="rail">
+          <span class="tag">Pipeline QC tool</span>
           <dl>
             <div>
               <dt>Scale</dt>
@@ -659,98 +829,6 @@
 
       <article class="case">
         <div class="rail">
-          <span class="tag">Human-in-the-loop data</span>
-          <dl>
-            <div>
-              <dt>Scale</dt>
-              <dd>96 pipeline runs over 15 months</dd>
-            </div>
-            <div>
-              <dt>Stack</dt>
-              <dd>Python, COCO, annotation vendor API, Prefect</dd>
-            </div>
-            <div>
-              <dt>Owned</dt>
-              <dd>Diagnosis, audit, fix, write-up</dd>
-            </div>
-          </dl>
-        </div>
-        <div class="body">
-          <h3>Found a silent label corruption bug that had been live for months</h3>
-          <p>Our annotation tool rejected a batch of human-labelled images, saying some labels pointed at classes that
-            didn't exist. The pipeline had finished green.</p>
-          <ul>
-            <li>I traced it to two things. The labelling vendor renumbers class IDs 1 to N on export. A refactor months
-              earlier had deleted the step that mapped them back, and the config file was byte-identical before and
-              after that change.</li>
-            <li>I found a field in each run's saved parameters that showed which code version it ran. With that I
-              audited 96 runs and narrowed the deploy switchover to a four-week window.</li>
-            <li>I showed that a run broke only when the new code met a class list with a gap in its IDs. That narrowed
-              the damage to exactly 2 runs, not the whole dataset.</li>
-            <li>In a separate labelling job, repeated scan IDs had created 42 blank duplicate images and stacked 16,631
-              duplicate labels onto 34 others. I traced it to a step that matched images by file name after throwing
-              away their full paths.</li>
-          </ul>
-          <div class="result"><span class="label">Result</span>
-            <p>A config-only fix, with output checked byte-for-byte against a reference run. It also includes a full
-              class mapping, so a future reorder of the classes can't silently mislabel data.</p>
-          </div>
-        </div>
-      </article>
-
-      <article class="case">
-        <div class="rail">
-          <span class="tag">Geometry pipeline</span>
-          <dl>
-            <div>
-              <dt>Scale</dt>
-              <dd>523.7 GB, 45,339 binary files, 7 platforms</dd>
-            </div>
-            <div>
-              <dt>Stack</dt>
-              <dd>Python, NumPy, Shapely, SciPy, Pillow</dd>
-            </div>
-            <div>
-              <dt>Owned</dt>
-              <dd>End to end: tool, validation, delivery</dd>
-            </div>
-          </dl>
-        </div>
-        <div class="body">
-          <h3>Counting 80,029 flanges across seven offshore platforms, with five ways to prove the count</h3>
-          <p>Repainting a platform is priced per paint block, and flanges are the standard measure of how much slow work
-            a block holds. Nobody had the numbers. The data existed in three separate places that had never been joined,
-            and it was older than several formats the current tools assume.</p>
-          <ul>
-            <li><b>A count that doesn't depend on the scan.</b> A flange seen from 15 scanners gives 15 different
-              partial views. So I pool every point of a part across all scans and use its overall centroid. That gives
-              one fixed location per flange, however many times it was seen. A threaded sweep reads the data at 330 to
-              560 MB/s and caches the result, so reruns with a different transform take seconds.</li>
-            <li><b>Why "99.8% landed in a block" proves nothing.</b> On a roughly symmetric platform, a mirrored
-              transform also places 100% of points. So I built five independent checks. Scanner positions projected onto
-              the plan matched to 0.000 px and 0.000 m on 5 of 7 platforms. An image-matching score showed points
-              landing on drawn structure 4.5 to 17.3 times more often than chance. The other three checks were
-              floor-level matching to find which CAD frame the blocks came from, clearance from each flange to its
-              block's walls as an error bar, and a from-scratch rewrite that reproduced all seven counts exactly.</li>
-            <li><b>Configs that were wrong.</b> The transform settings couldn't be used as written on 3 of 7 platforms,
-              and following them gave a clean run that assigned zero flanges. One platform's blocks were 9.8 cm off
-              because a pose was applied that shouldn't have been. Four separate measurements agreed on the fix, which
-              moved 190 flanges. I then showed the same defect couldn't occur on the other platforms.</li>
-            <li><b>File formats that lied.</b> Files named 0–5 looked like type IDs but were cube faces. Three platforms
-              labelled the part-ID field as "category". Four shipped no format description at all. I validated each
-              field by what it contained, not by its name, and required a 90% match against the parts list. Every
-              platform scored 98.9% or higher.</li>
-          </ul>
-          <div class="result"><span class="label">Result</span>
-            <p>78,722 flanges placed in 396 paint blocks, plus per-block point clouds for visual QC. The report states
-              its own limits: 1,153 flanges were never scanned, and 0.8–3.8% sit across two blocks. The biggest
-              remaining risk, upstream segmentation errors, is named rather than hidden.</p>
-          </div>
-        </div>
-      </article>
-
-      <article class="case">
-        <div class="rail">
           <span class="tag">Computer vision</span>
           <dl>
             <div>
@@ -784,84 +862,6 @@
             <p>On the test site: one deck auto-accepted at 2.3 px error, the right answer ranked first on another, and
               zero wrong answers accepted. I wrote up the cases it can't solve, such as repeating grids and symmetric
               structures, so reviewers know what to expect.</p>
-          </div>
-        </div>
-      </article>
-
-      <article class="case">
-        <div class="rail">
-          <span class="tag">Data infrastructure</span>
-          <dl>
-            <div>
-              <dt>Scale</dt>
-              <dd>1.85 TB, 3,021 scans; 913 GB pull</dd>
-            </div>
-            <div>
-              <dt>Stack</dt>
-              <dd>GCS, gcloud, Python, Bash</dd>
-            </div>
-            <div>
-              <dt>Owned</dt>
-              <dd>Migration and verification</dd>
-            </div>
-          </dl>
-        </div>
-        <div class="body">
-          <h3>A 1.85 TB data swap where the tools said "success" and weren't</h3>
-          <p>I replaced a production point cloud dataset with re-aligned output. Almost every standard safety check
-            turned out to be wrong.</p>
-          <ul>
-            <li>The upload CLI dropped 35% of one deck's files and still exited 0. The cause was parallel composite
-              uploads hitting a token-refresh race under heavy load.</li>
-            <li>The re-aligned files were exactly the same size as the old ones, so a size-based sync would have skipped
-              all 3,021 and reported success.</li>
-            <li>Recursive delete permanently removes object versions even with bucket versioning on. My own verify
-              script also printed "all checks passed" after a parsing error skipped a check.</li>
-            <li>On the download side, a shared copy helper held whole 1 GB objects in memory and spawned a thread pool
-              on every call.</li>
-          </ul>
-          <div class="result"><span class="label">Result</span>
-            <p>No files lost. I now verify by object count and CRC32C, not exit codes, and take an explicit backup
-              before any delete. Streaming downloads cut memory from 11.8 GB to 0.5 GB and raised throughput from 62 to
-              87 MB/s.</p>
-          </div>
-        </div>
-      </article>
-
-      <article class="case">
-        <div class="rail">
-          <span class="tag">Production debugging</span>
-          <dl>
-            <div>
-              <dt>Scale</dt>
-              <dd>49,222-task job on autoscaled Ray</dd>
-            </div>
-            <div>
-              <dt>Stack</dt>
-              <dd>Kubernetes (GKE), Ray, Prefect</dd>
-            </div>
-            <div>
-              <dt>Owned</dt>
-              <dd>Root cause and fix proposal</dd>
-            </div>
-          </dl>
-        </div>
-        <div class="body">
-          <h3>Debugging a crashing cluster with no shell access</h3>
-          <p>Pipeline stages kept showing "Crashed" on a customer cluster. Nobody on the team had exec permission. I
-            found that was a provisioning gap and wrote the one-line fix for the project owners. Meanwhile I worked from
-            logs and events only.</p>
-          <ul>
-            <li>The autoscaler was evicting the orchestrator's own server pods, because they had no disruption budget.
-              That caused 500s on the concurrency lease endpoint, which killed stages as they started.</li>
-            <li>I ruled out two convincing red herrings. The "node out of memory" message referred to one container's
-              limit on a 504 GB node, and DNS autoscaling looked related but wasn't the cause.</li>
-            <li>The final failure stopped the job at 99.87%. I traced it to a credentials DaemonSet that showed 4 of 4
-              ready but only 1 available.</li>
-          </ul>
-          <div class="result"><span class="label">Result</span>
-            <p>A clear written diagnosis and infra fix, not a code change. Because the job keeps a resume ledger, only
-              the 64 missing tasks needed to rerun.</p>
           </div>
         </div>
       </article>
@@ -932,10 +932,17 @@
             <h2>From mechanical to data</h2>
           </div>
           <ol class="timeline">
+            <li><span class="when">In progress</span>
+              <div><b>IBM Data Engineering Professional Certificate</b>
+                <p>Self-study alongside work: SQL on IBM Db2, ETL, data warehousing and Pandas, through coursework
+                  projects.</p>
+              </div>
+            </li>
             <li><span class="when">2024 – now</span>
               <div><b>Data Operations Engineer</b>
-                <p>Data team at an industrial AI company. Scan processing pipelines, labelling workflows, CAD and
-                  geometry data, and cluster operations.</p>
+                <p>Data team at an industrial AI company. Staging data between AWS S3 and GCS so pipeline flows can
+                  run on a GKE cluster, running and debugging Prefect pipelines, labelling data workflows, and batch
+                  processing of scan and CAD data in Python.</p>
               </div>
             </li>
             <li><span class="when">2022 – 2024</span>
@@ -945,7 +952,7 @@
             </li>
             <li><span class="when">2022</span>
               <div><b>BSc Mechanical Engineering</b>
-                <p>Engineering degree, then a move into data engineering through day-to-day work on data.</p>
+                <p>Engineering degree, then into data through day-to-day work on scan pipelines.</p>
               </div>
             </li>
           </ol>
@@ -957,19 +964,23 @@
           </div>
           <div class="stack">
             <div><span class="label">Languages</span>
-              <div class="chips"><span>Python</span><span>Bash</span><span>JavaScript</span></div>
+              <div class="chips"><span>Python</span><span>Bash</span></div>
+            </div>
+            <div><span class="label">Cloud and pipelines</span>
+              <div class="chips"><span>GCP / GCS</span><span>AWS S3</span><span>Prefect</span><span>Kubernetes
+                  (GKE)</span><span>Ray</span></div>
+            </div>
+            <div><span class="label">Learning · IBM Data Engineering certificate</span>
+              <div class="chips"><span>SQL</span><span>IBM Db2</span><span>ETL</span><span>Data
+                  warehousing</span><span>Pandas</span></div>
             </div>
             <div><span class="label">Data and geometry</span>
               <div class="chips">
                 <span>NumPy</span><span>SciPy</span><span>Open3D</span><span>Shapely</span><span>trimesh</span><span>scikit-learn</span>
               </div>
             </div>
-            <div><span class="label">Infrastructure</span>
-              <div class="chips"><span>GCP /
-                  GCS</span><span>Kubernetes</span><span>Ray</span><span>Prefect</span><span>AWS S3</span></div>
-            </div>
             <div><span class="label">Front end</span>
-              <div class="chips"><span>three.js</span><span>WebGL / GLSL</span><span>HTML / CSS</span></div>
+              <div class="chips"><span>JavaScript</span><span>three.js</span><span>WebGL / GLSL</span><span>HTML / CSS</span></div>
             </div>
             <div><span class="label">AI tooling</span>
               <div class="chips"><span>Claude Code</span><span>Annotation pipelines</span><span>COCO datasets</span>
@@ -981,8 +992,8 @@
     </section>
 
     <footer>
-      <p>I'm looking for a team where I own a product end to end. What I can add is the habit of getting it right and
-        proving it.</p>
+      <p>I'm looking for a data engineering role where the data has to be right, not just delivered. What I bring is
+        the habit of checking it and proving it.</p>
       <div class="links" style="margin-top:0">
         <a href="https://github.com/abdullah-farhan-1">GitHub</a>
         <a href="https://www.linkedin.com/in/abdullah-farhan-9738a43ab/">LinkedIn</a>
